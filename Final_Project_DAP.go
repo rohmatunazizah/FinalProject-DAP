@@ -267,3 +267,49 @@ func listCountry(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, data)
 }
+
+// fmt.Println("===================== LIST KERJOAN ====================================")
+
+type Jobs1 struct {
+	Results      []struct {
+		Name            string    `json:"name"`
+		ID              int       `json:"id"`
+		Categories []interface{} `json:"categories"`
+		Company struct {
+			ID        int    `json:"id"`
+			ShortName string `json:"short_name"`
+			Name      string `json:"name"`
+		} `json:"company"`
+		Locations       []struct {
+			Name string `json:"name"`
+		} `json:"locations"`
+	} `json:"results"`
+}
+
+
+func listkerjoan(c echo.Context) error {
+	response, _ := http.Get("https://www.themuse.com/api/public/jobs?page=1")
+
+	responseData, _ := ioutil.ReadAll(response.Body)
+	defer response.Body.Close()
+
+	var Kerjaan Jobs1
+	json.Unmarshal(responseData, &Kerjaan)
+
+	return c.JSON(http.StatusOK, Kerjaan)
+}
+
+// fmt.Println("=========================================================")
+
+func main() {
+	e := echo.New()
+
+	e.POST("/apply", ApplyController)
+	e.GET("/apply_jobs", GetUsersController)
+	e.GET("/applys/:id", GetUserController) //get applys job use filter id pelamar
+	e.GET("/job_list", GetUserCountry) //get job list use filter country
+	e.GET("/jobs_list", listkerjoan)
+	e.GET("/country", listCountry)
+
+	e.Logger.Fatal(e.Start(":8000"))
+}
