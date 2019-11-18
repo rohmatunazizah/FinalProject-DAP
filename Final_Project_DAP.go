@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/labstack/echo"
@@ -118,14 +120,21 @@ func ApplyController(c echo.Context) error {
 	Nama := ValidateName(apply.Nama)
 	if Nama == "" {
 		return c.JSON(http.StatusNotAcceptable, map[string]interface{}{
-			"message": "406 invalida data request",
+			"message": "406 Invalid Name Format",
 		})
 	}
-	//ValidateEmaila
+	//ValidateEmail
 	Email := ValidateEmail(apply.Email)
-	if Email == "" {
+	if !Email {
 		return c.JSON(http.StatusNotAcceptable, map[string]interface{}{
-			"message": "406 invalida data request",
+			"message": "406 Invalid Email Format",
+		})
+	}
+	//ValidatePhoneNumber
+	Phone := ValidatePhoneNumber(apply.PhoneNumber)
+	if !Phone {
+		return c.JSON(http.StatusNotAcceptable, map[string]interface{}{
+			"message": "406 Invalid Input Phone Number",
 		})
 	}
 
@@ -140,14 +149,15 @@ func ApplyController(c echo.Context) error {
 
 	//apply success return
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "succes apply",
-		"Nama":    apply.Nama,
-		"jobName": ValidateJobId(apply.JobId),
-		"Age":     apply.Age,
-		"email":   apply.Email,
-		"Gender":  apply.Gender,
-		"country": ValidateCountry(apply.Country),
-		"id":      apply.Id,
+		"message":     "succes apply",
+		"Nama":        apply.Nama,
+		"jobName":     ValidateJobId(apply.JobId),
+		"Age":         apply.Age,
+		"email":       apply.Email,
+		"Gender":      apply.Gender,
+		"country":     ValidateCountry(apply.Country),
+		"id":          apply.Id,
+		"phonenumber": apply.PhoneNumber,
 	})
 }
 
@@ -169,8 +179,14 @@ func ValidateName(Nama string) string {
 	return Nama
 }
 
-func ValidateEmail(Email string) string {
-	return Email
+func ValidateEmail(email string) bool {
+	Re := regexp.MustCompile(`^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,4}$`)
+	return Re.MatchString(email)
+}
+
+func ValidatePhoneNumber(s string) bool {
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }
 
 //validate country
@@ -215,35 +231,35 @@ func GetUserController(c echo.Context) error {
 	})
 }
 
-func GetUserCountry(c echo.Context) error {
-	var locationjobs string
-	locations := strings.ToLower(c.QueryParam("locations"))
-	var Kerjaan Jobs1
-	response, _ := http.Get("https://www.themuse.com/api/public/jobs?page=1")
+// func GetUserCountry(c echo.Context) error {
+// 	var locationjobs string
+// 	locations := strings.ToLower(c.QueryParam("locations"))
+// 	var Kerjaan Jobs1
+// 	response, _ := http.Get("https://www.themuse.com/api/public/jobs?page=1")
 
-	responseData, _ := ioutil.ReadAll(response.Body)
-	defer response.Body.Close()
+// 	responseData, _ := ioutil.ReadAll(response.Body)
+// 	defer response.Body.Close()
 
-	json.Unmarshal(responseData, &Kerjaan)
-	// fmt.Println(Kerjaan)
-	for _, value := range Kerjaan.Results {
-		if (len(value.Locations)) < 1 {
-			continue
-		} else {
-			locationjobs = strings.ToLower(value.Locations[0].Name)
-		}
-		if strings.Contains(locationjobs, locations) {
+// 	json.Unmarshal(responseData, &Kerjaan)
+// 	// fmt.Println(Kerjaan)
+// 	for _, value := range Kerjaan.Results {
+// 		if (len(value.Locations)) < 1 {
+// 			continue
+// 		} else {
+// 			locationjobs = strings.ToLower(value.Locations[0].Name)
+// 		}
+// 		if strings.Contains(locationjobs, locations) {
 
-			return c.JSON(http.StatusOK, map[string]interface{}{
-				"message": "success get data",
-				"users":   value,
-			})
-		}
-	}
-	return c.JSON(http.StatusNotFound, map[string]interface{}{
-		"message": "data not found",
-	})
-}
+// 			return c.JSON(http.StatusOK, map[string]interface{}{
+// 				"message": "success get data",
+// 				"users":   value,
+// 			})
+// 		}
+// 	}
+// 	return c.JSON(http.StatusNotFound, map[string]interface{}{
+// 		"message": "data not found",
+// 	})
+// }
 
 // fmt.Println("======================== LIST COUNTRY =================================")
 
@@ -271,24 +287,30 @@ func listCountry(c echo.Context) error {
 // fmt.Println("===================== LIST KERJOAN ====================================")
 
 type Jobs1 struct {
-	Results      []struct {
-		Name            string    `json:"name"`
-		ID              int       `json:"id"`
+	Results []struct {
+		Name       string        `json:"name"`
+		ID         int           `json:"id"`
 		Categories []interface{} `json:"categories"`
-		Company struct {
+		Company    struct {
 			ID        int    `json:"id"`
 			ShortName string `json:"short_name"`
 			Name      string `json:"name"`
 		} `json:"company"`
-		Locations       []struct {
+		Locations []struct {
 			Name string `json:"name"`
 		} `json:"locations"`
 	} `json:"results"`
 }
 
-
 func listkerjoan(c echo.Context) error {
-	response, _ := http.Get("https://www.themuse.com/api/public/jobs?page=1")
+	locations := c.QueryParam("location")
+	request := "https://www.themuse.com/api/public/jobs?page=1"
+	if len(locations) > 0 {
+		request += "&location=" + url.PathEscape(locations)
+	}
+	fmt.Println(request)
+
+	response, _ := http.Get(request)
 
 	responseData, _ := ioutil.ReadAll(response.Body)
 	defer response.Body.Close()
@@ -307,7 +329,7 @@ func main() {
 	e.POST("/apply", ApplyController)
 	e.GET("/apply_jobs", GetUsersController)
 	e.GET("/applys/:id", GetUserController) //get applys job use filter id pelamar
-	e.GET("/job_list", GetUserCountry) //get job list use filter country
+	// e.GET("/job_list", GetUserCountry)      //get job list use filter country
 	e.GET("/jobs_list", listkerjoan)
 	e.GET("/country", listCountry)
 
